@@ -1,6 +1,3 @@
-deontevanterpool.com, www.deontevanterpool.com {
-    tls deonte.vanterpool@outlook.com {
-        ca https://acme.zerossl.com/v2/DV90
-    }
+http://deontevanterpool.com, http://www.deontevanterpool.com {
     reverse_proxy deontevanterpool:4000
 }

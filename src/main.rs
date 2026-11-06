@@ -15,23 +15,22 @@ pub mod state;
 pub mod tests;
 
 struct Environment {
-    blog_posts_bucket: String,
     portfolio_entries_bucket: String,
     templates_bucket: String,
+    dev: bool,
 }
 
 impl Environment {
     pub fn new() -> Self {
-        let blog_posts_bucket = std::env::var("BLOG_POSTS_BUCKET")
-            .expect("No environment variable set for blog posts bucket");
         let portfolio_entries_bucket = std::env::var("PORTFOLIO_ENTRIES_BUCKET")
             .expect("No environment variable set for portfolio entries bucket");
         let templates_bucket = std::env::var("TEMPLATES_BUCKET").expect("No environment variable set for portfolio entries bucket");
+        let environment = std::env::var("ENVIRONMENT").unwrap_or("".to_owned());
 
         Self {
-            blog_posts_bucket,
             portfolio_entries_bucket,
             templates_bucket,
+            dev: environment == "dev",
         }
     }
 }
@@ -53,7 +52,7 @@ async fn main() {
     let env = Environment::new();
 
     let localhost_server_state =
-        AppState::from_s3_buckets(&client, &env.blog_posts_bucket, &env.portfolio_entries_bucket, &env.templates_bucket).await;
+        AppState::from_s3_buckets(&client, &env.portfolio_entries_bucket, &env.templates_bucket, env.dev).await;
     let public_server_state = localhost_server_state.clone();
 
     // build our application with a route
@@ -67,23 +66,8 @@ async fn main() {
         .route("/resume", get(handlers::get_resume))
         .with_state(public_server_state);
 
-    let localhost_app = Router::new()
-        .route("/", get(Redirect::permanent("/blog/upload")))
-        // .route("/blog", post(handlers::post_blog))
-        // .route("/blog/upload", get(handlers::get_blog_upload))
-        // .route("/blog/preview", get(handlers::get_blog_preview))
-        .route("/portfolio", post(handlers::post_portfolio))
-        .route("/portfolio/upload", get(handlers::get_portfolio_upload))
-        .route("/portfolio/preview", get(handlers::get_portfolio_preview))
-        // .route("/subcription", post(handlers::post_subcription))
-        .with_state(localhost_server_state);
-
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:4000")
-        .await
-        .unwrap();
-
-    let localhost_listener = tokio::net::TcpListener::bind("0.0.0.0:4001")
         .await
         .unwrap();
 
@@ -91,22 +75,15 @@ async fn main() {
         "Serving public API: http://{}",
         listener.local_addr().unwrap()
     );
-    println!(
-        "Serving private API: http://{}",
-        localhost_listener.local_addr().unwrap()
-    );
 
     let public_api = axum::serve(listener, app).into_future();
-    let localhost_api = axum::serve(localhost_listener, localhost_app).into_future();
 
     // run both APIs concurrently
     let public_handle = tokio::spawn(public_api);
-    let localhost_handle = tokio::spawn(localhost_api);
 
     // Wait for either API to finish
     tokio::select! {
         _ = public_handle => {},
-        _ = localhost_handle => {},
     }
 
     println!("Shutting down the server...");

@@ -12,7 +12,6 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct AppState {
-    blog_posts: Vec<models::BlogPost>,
     portfolio_entries: Vec<models::PortfolioEntry>,
     tera: Tera,
 }
@@ -20,32 +19,14 @@ pub struct AppState {
 impl AppState {
     pub async fn from_s3_buckets(
         client: &aws_sdk_s3::Client,
-        blog_posts_bucket: &str,
         portfolio_entries_bucket: &str,
         templates_bucket: &str,
+        dev: bool
     ) -> Self {
-        let blog_post_objects = Self::aws_list_objects(client, blog_posts_bucket)
-            .await
-            .unwrap();
         let portfolio_entry_objects = Self::aws_list_objects(client, portfolio_entries_bucket)
             .await
             .unwrap();
         let template_objects = Self::aws_list_objects(client, templates_bucket).await.unwrap();
-        
-        let blog_posts = Vec::new();
-        /*
-        let blog_posts = BlogPostService::parse_many(
-            future::join_all(
-                blog_post_objects
-                    .iter()
-                    .map(|object| Self::aws_get_object(client, blog_posts_bucket, object)),
-            )
-            .await
-            .into_iter()
-            .map(|result| result.unwrap())
-            .collect(),
-        );
-        */
 
         let portfolio_entries = PortfolioService::parse_many(
             future::join_all(
@@ -64,11 +45,10 @@ impl AppState {
             template_objects.iter().map(|object| Self::aws_get_object(client, templates_bucket, object)),
         ).await.into_iter().map(|result| result.unwrap()).zip(template_objects).for_each(|(contents, name)| tera.add_raw_template(&name, &contents).expect("ran into an error creating a template"));
 
-        Self {blog_posts, portfolio_entries, tera}
-    }
-
-    pub fn get_blog_posts(&self) -> &Vec<models::BlogPost> {
-        &self.blog_posts
+        if dev {
+            tera.add_template_file("templates/portfolio.tera.html", Some("portfolio.tera.html")).unwrap();
+        }
+        Self {portfolio_entries, tera}
     }
 
     pub fn get_portfolio_entries(&self) -> &Vec<models::PortfolioEntry> {

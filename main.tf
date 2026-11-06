@@ -125,6 +125,12 @@ resource "aws_ecs_task_definition" "application_task" {
       image     = "076224130336.dkr.ecr.us-east-1.amazonaws.com/caddy:latest"
       essential = true
       links     = ["deontevanterpool"]
+      healthCheck = {
+        command = ["CMD-SHELL","curl -Is http://localhost | grep Caddy || exit 1"]
+        interval = 60,
+        timeout = 10,
+        retries = 3
+      }
       portMappings = [
         { containerPort = 80, hostPort = 80, protocol = "tcp" },
         { containerPort = 443, hostPort = 443, protocol = "tcp" }
@@ -227,12 +233,6 @@ resource "aws_security_group" "ec2_security_group" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]   # for SSH; adjust as needed
-  }
   ingress {
     from_port   = 443
     to_port     = 443
